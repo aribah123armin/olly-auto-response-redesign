@@ -1,0 +1,1443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Olly — Auto-Response Editor</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0f14;
+    --surface: #16181f;
+    --surface2: #1e2029;
+    --surface3: #252832;
+    --border: rgba(255,255,255,0.07);
+    --border-active: rgba(255,255,255,0.15);
+    --text: #f0f1f5;
+    --text-muted: #7c7f8e;
+    --text-dim: #4a4d5c;
+    --accent: #6c63ff;
+    --accent-soft: rgba(108,99,255,0.15);
+    --accent-glow: rgba(108,99,255,0.3);
+    --green: #22c78e;
+    --green-soft: rgba(34,199,142,0.12);
+    --red: #ff5c5c;
+    --red-soft: rgba(255,92,92,0.1);
+    --amber: #f59e0b;
+    --star: #fbbf24;
+    --zomato: #e23744;
+    --radius: 16px;
+    --radius-sm: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Sora', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow-x: hidden;
+  }
+
+  /* Ambient background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 15% 20%, rgba(108,99,255,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 50% at 85% 80%, rgba(34,199,142,0.06) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .phone-shell {
+    position: relative;
+    z-index: 1;
+    width: 390px;
+    min-height: 844px;
+    background: var(--surface);
+    border-radius: 44px;
+    border: 1.5px solid var(--border-active);
+    overflow: hidden;
+    box-shadow:
+      0 0 0 6px rgba(255,255,255,0.03),
+      0 40px 100px rgba(0,0,0,0.7),
+      0 0 80px rgba(108,99,255,0.12);
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Status bar */
+  .status-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 28px 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+
+  .status-icons { display: flex; gap: 6px; align-items: center; }
+  .status-icons svg { width: 14px; height: 14px; fill: var(--text-muted); }
+
+  /* Screen container */
+  .screen { display: none; flex-direction: column; flex: 1; }
+  .screen.active { display: flex; animation: slideIn 0.3s ease; }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(24px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes slideBack {
+    from { opacity: 0; transform: translateX(-24px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .screen.back { animation: slideBack 0.3s ease; }
+
+  /* ── SCREEN 1: Review card ── */
+  .screen-header {
+    padding: 16px 24px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .back-btn {
+    width: 32px; height: 32px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0;
+    transition: background 0.2s;
+  }
+  .back-btn:hover { background: var(--surface3); }
+  .back-btn svg { width: 14px; height: 14px; stroke: var(--text-muted); fill: none; stroke-width: 2.5; }
+
+  .screen-title { font-size: 15px; font-weight: 600; flex: 1; }
+  .step-indicator {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.5px;
+  }
+
+  .screen-body { flex: 1; overflow-y: auto; padding: 20px 20px 0; }
+  .screen-body::-webkit-scrollbar { display: none; }
+
+  /* Review card */
+  .review-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .review-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .reviewer-avatar {
+    width: 38px; height: 38px;
+    background: linear-gradient(135deg, #6c63ff, #22c78e);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; flex-shrink: 0;
+  }
+  .reviewer-info { flex: 1; }
+  .reviewer-name { font-size: 13px; font-weight: 600; }
+  .reviewer-sub { font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+  .reviewer-sub .dot { width: 3px; height: 3px; background: var(--text-dim); border-radius: 50%; }
+  .platform-badge {
+    background: var(--zomato);
+    color: white;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+  }
+  .stars { display: flex; gap: 2px; }
+  .stars svg { width: 12px; height: 12px; fill: var(--star); }
+  .stars svg.empty { fill: var(--surface3); }
+  .review-badge {
+    background: var(--red-soft);
+    border: 1px solid rgba(255,92,92,0.2);
+    color: var(--red);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 20px;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .review-text { font-size: 13px; line-height: 1.65; color: #c8cad4; }
+
+  /* Sentiment tags */
+  .sentiment-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  .sentiment-tag {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 20px;
+    letter-spacing: 0.3px;
+  }
+  .sentiment-tag.negative { background: var(--red-soft); color: var(--red); border: 1px solid rgba(255,92,92,0.2); }
+  .sentiment-tag.neutral { background: rgba(245,158,11,0.1); color: var(--amber); border: 1px solid rgba(245,158,11,0.2); }
+
+  /* AI Response area */
+  .section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+
+  .response-card {
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    margin-bottom: 14px;
+    transition: border-color 0.2s;
+  }
+  .response-card.editing { border-color: var(--accent); }
+  .response-card.editing .response-header { border-bottom-color: rgba(108,99,255,0.2); }
+
+  .response-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(108,99,255,0.05);
+  }
+  .olly-dot {
+    width: 8px; height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--accent-glow);
+    flex-shrink: 0;
+  }
+  .olly-dot.thinking {
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--accent-glow); }
+    50% { opacity: 0.4; box-shadow: 0 0 2px var(--accent-glow); }
+  }
+  .response-header-label { font-size: 11px; font-weight: 600; color: var(--accent); flex: 1; letter-spacing: 0.3px; }
+  .edit-mode-btn {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .edit-mode-btn:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  .edit-mode-btn svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2.5; }
+
+  .response-body { padding: 14px; }
+
+  /* Editable textarea (hidden by default) */
+  .response-textarea {
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: 'Sora', sans-serif;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text);
+    resize: none;
+    min-height: 120px;
+    display: none;
+  }
+
+  /* Inline text with highlight support */
+  .response-text-view {
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  .response-text-view .highlight {
+    background: rgba(108,99,255,0.2);
+    border-radius: 3px;
+    padding: 0 2px;
+  }
+
+  /* Inline edit toolbar (shows on text selection) */
+  .inline-toolbar {
+    display: none;
+    position: absolute;
+    background: var(--surface3);
+    border: 1px solid var(--border-active);
+    border-radius: 10px;
+    padding: 6px;
+    gap: 4px;
+    align-items: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    z-index: 100;
+    animation: popIn 0.15s ease;
+    flex-wrap: wrap;
+    max-width: 280px;
+  }
+  @keyframes popIn {
+    from { opacity: 0; transform: scale(0.9) translateY(4px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .inline-toolbar.visible { display: flex; }
+  .toolbar-action {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 5px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .toolbar-action svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2.5; flex-shrink: 0; }
+  .toolbar-action.tone { background: var(--accent-soft); color: var(--accent); }
+  .toolbar-action.tone:hover { background: rgba(108,99,255,0.25); }
+  .toolbar-action.rewrite { background: rgba(34,199,142,0.12); color: var(--green); }
+  .toolbar-action.rewrite:hover { background: rgba(34,199,142,0.2); }
+  .toolbar-action.delete { background: var(--red-soft); color: var(--red); }
+  .toolbar-action.delete:hover { background: rgba(255,92,92,0.18); }
+  .toolbar-sep { width: 1px; height: 18px; background: var(--border-active); flex-shrink: 0; }
+
+  /* Quick instruction bar */
+  .quick-bar {
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 14px;
+    cursor: text;
+    transition: border-color 0.2s;
+  }
+  .quick-bar:focus-within { border-color: var(--accent); }
+  .quick-bar svg { width: 15px; height: 15px; stroke: var(--text-dim); fill: none; stroke-width: 2; flex-shrink: 0; }
+  .quick-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: 'Sora', sans-serif;
+    font-size: 12px;
+    color: var(--text);
+    caret-color: var(--accent);
+  }
+  .quick-input::placeholder { color: var(--text-dim); }
+  .quick-send {
+    width: 26px; height: 26px;
+    background: var(--accent);
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.2s;
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  .quick-send.visible { opacity: 1; transform: scale(1); }
+  .quick-send:hover { background: #7c75ff; }
+  .quick-send svg { width: 12px; height: 12px; stroke: white; fill: none; stroke-width: 2.5; }
+
+  /* Chip scrollbar */
+  .chips-scroll {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    margin-bottom: 16px;
+    scrollbar-width: none;
+  }
+  .chips-scroll::-webkit-scrollbar { display: none; }
+  .chip {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text-muted);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    display: flex; align-items: center; gap: 5px;
+    flex-shrink: 0;
+  }
+  .chip svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2.5; }
+  .chip:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  .chip.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+
+  /* Instruction history */
+  .edit-history {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .history-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+    background: var(--surface2);
+    padding: 7px 12px;
+    border-radius: 8px;
+    animation: slideIn 0.25s ease;
+  }
+  .history-item svg { width: 12px; height: 12px; stroke: var(--green); fill: none; stroke-width: 2.5; flex-shrink: 0; }
+  .history-item span { flex: 1; }
+  .history-undo {
+    font-size: 10px;
+    color: var(--text-dim);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    transition: color 0.15s;
+  }
+  .history-undo:hover { color: var(--text-muted); }
+
+  /* Footer */
+  .screen-footer {
+    padding: 16px 20px 28px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .btn-primary {
+    width: 100%;
+    background: var(--accent);
+    color: white;
+    font-family: 'Sora', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 14px 20px;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    box-shadow: 0 4px 20px var(--accent-glow);
+  }
+  .btn-primary:hover { background: #7c75ff; transform: translateY(-1px); box-shadow: 0 6px 24px var(--accent-glow); }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary svg { width: 16px; height: 16px; stroke: white; fill: none; stroke-width: 2.5; }
+
+  .btn-secondary {
+    width: 100%;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: 'Sora', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 8px;
+  }
+  .btn-secondary:hover { border-color: var(--border-active); color: var(--text); }
+
+  .footer-row { display: flex; gap: 10px; }
+  .btn-half {
+    flex: 1;
+    background: var(--surface2);
+    color: var(--text-muted);
+    font-family: 'Sora', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .btn-half:hover { background: var(--surface3); color: var(--text); border-color: var(--border-active); }
+  .btn-half svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2.5; }
+  .btn-half.danger:hover { background: var(--red-soft); color: var(--red); border-color: rgba(255,92,92,0.3); }
+
+  /* ── SCREEN 3: Instruction Panel (bottom sheet feel) ── */
+  .instruction-panel {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .instruction-panel textarea {
+    width: 100%;
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    font-family: 'Sora', sans-serif;
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.6;
+    resize: none;
+    outline: none;
+    min-height: 90px;
+    caret-color: var(--accent);
+    transition: border-color 0.2s;
+  }
+  .instruction-panel textarea:focus { border-color: var(--accent); }
+  .instruction-panel textarea::placeholder { color: var(--text-dim); }
+  .instruction-shortcuts {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .shortcut {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 5px 10px;
+    border-radius: 20px;
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .shortcut:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+
+  /* ── SCREEN 4: Success ── */
+  .success-screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 28px;
+    text-align: center;
+    gap: 16px;
+  }
+  .success-icon {
+    width: 80px; height: 80px;
+    background: var(--green-soft);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid rgba(34,199,142,0.3);
+    margin-bottom: 8px;
+    animation: successPop 0.5s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  @keyframes successPop {
+    from { opacity: 0; transform: scale(0.5); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .success-icon svg { width: 36px; height: 36px; stroke: var(--green); fill: none; stroke-width: 2.5; }
+  .success-title { font-size: 22px; font-weight: 700; line-height: 1.3; }
+  .success-sub { font-size: 13px; color: var(--text-muted); line-height: 1.65; }
+  .success-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    text-align: left;
+    width: 100%;
+  }
+  .success-card-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 8px; }
+  .success-card-text { font-size: 12px; line-height: 1.65; color: #c8cad4; }
+  .edit-count {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-top: 8px;
+  }
+  .edit-count .badge {
+    background: var(--green-soft);
+    color: var(--green);
+    border-radius: 20px;
+    padding: 2px 8px;
+    font-size: 10px;
+  }
+
+  /* ── Thinking animation ── */
+  .thinking-dots {
+    display: inline-flex;
+    gap: 3px;
+    align-items: center;
+    height: 20px;
+    padding: 4px 0;
+  }
+  .thinking-dots span {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: bounce 1.2s ease-in-out infinite;
+  }
+  .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; }
+  }
+
+  /* Divider */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 16px 0;
+  }
+
+  /* Context pill */
+  .context-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(34,199,142,0.08);
+    border: 1px solid rgba(34,199,142,0.2);
+    border-radius: 20px;
+    padding: 6px 12px;
+    font-size: 11px;
+    color: var(--green);
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .context-pill svg { width: 12px; height: 12px; stroke: var(--green); fill: none; stroke-width: 2.5; }
+
+  /* Tone selector */
+  .tone-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .tone-option {
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .tone-option.selected { border-color: var(--accent); background: var(--accent-soft); }
+  .tone-option:hover { border-color: var(--border-active); }
+  .tone-name { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+  .tone-desc { font-size: 10px; color: var(--text-dim); }
+  .tone-option.selected .tone-name { color: var(--accent); }
+
+  /* Offer banner */
+  .offer-banner {
+    background: linear-gradient(135deg, rgba(245,158,11,0.1), rgba(245,158,11,0.05));
+    border: 1px solid rgba(245,158,11,0.2);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin-bottom: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .offer-banner:hover { background: linear-gradient(135deg, rgba(245,158,11,0.15), rgba(245,158,11,0.08)); }
+  .offer-icon { font-size: 18px; flex-shrink: 0; }
+  .offer-text { flex: 1; }
+  .offer-title { font-size: 12px; font-weight: 700; color: var(--amber); margin-bottom: 2px; }
+  .offer-desc { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+  .offer-toggle {
+    width: 36px; height: 20px;
+    border-radius: 10px;
+    background: var(--surface3);
+    border: 1px solid var(--border);
+    position: relative;
+    flex-shrink: 0;
+    transition: background 0.2s;
+    cursor: pointer;
+  }
+  .offer-toggle.on { background: var(--amber); border-color: var(--amber); }
+  .offer-toggle::after {
+    content: '';
+    position: absolute;
+    width: 14px; height: 14px;
+    background: white;
+    border-radius: 50%;
+    top: 2px; left: 2px;
+    transition: left 0.2s;
+  }
+  .offer-toggle.on::after { left: 18px; }
+
+  /* Scrollable content area */
+  .scroll-fade {
+    position: relative;
+  }
+  .scroll-fade::after {
+    content: '';
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    background: linear-gradient(transparent, var(--surface));
+    pointer-events: none;
+    display: block;
+  }
+
+  /* Char counter */
+  .char-counter {
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-dim);
+    text-align: right;
+    margin-top: 4px;
+  }
+
+  /* Snackbar */
+  .snackbar {
+    position: absolute;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--surface3);
+    border: 1px solid var(--border-active);
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 200;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .snackbar.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .snackbar svg { width: 13px; height: 13px; stroke: var(--green); fill: none; stroke-width: 2.5; }
+
+  /* Loading overlay */
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(14,15,20,0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    z-index: 300;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    border-radius: 44px;
+  }
+  .loading-overlay.show { opacity: 1; pointer-events: all; }
+  .loading-logo { font-size: 28px; font-weight: 800; letter-spacing: -1px; background: linear-gradient(135deg, var(--accent), var(--green)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .loading-label { font-size: 13px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+</style>
+</head>
+<body>
+
+<div class="phone-shell" id="app">
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <span>9:41</span>
+    <div class="status-icons">
+      <svg viewBox="0 0 24 24"><path d="M1 6l11 13L23 6"/></svg>
+      <svg viewBox="0 0 24 24"><rect x="1" y="7" width="4" height="10" rx="1"/><rect x="7" y="4" width="4" height="13" rx="1"/><rect x="13" y="1" width="4" height="16" rx="1"/><rect x="19" y="4" width="4" height="13" rx="1" opacity="0.3"/></svg>
+      <svg viewBox="0 0 24 24"><path d="M23 6l-9 9-4-4L1 20"/></svg>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       SCREEN 1: Review + AI Draft
+  ══════════════════════════════════════ -->
+  <div class="screen active" id="screen1">
+    <div class="screen-header">
+      <div class="back-btn"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+      <span class="screen-title">Review Response</span>
+      <span class="step-indicator">1 / 3</span>
+    </div>
+
+    <div class="screen-body scroll-fade" id="screen1Body">
+      <!-- Review Card -->
+      <div class="review-card">
+        <div class="review-meta">
+          <div class="reviewer-avatar">NK</div>
+          <div class="reviewer-info">
+            <div class="reviewer-name">Nikhil C</div>
+            <div class="reviewer-sub">
+              <span class="platform-badge">ZOMATO</span>
+              <span class="dot"></span>
+              <span>Koramangala</span>
+              <span class="dot"></span>
+              <span>Apr 25</span>
+            </div>
+          </div>
+          <div class="review-badge">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            1 star
+          </div>
+        </div>
+        <div class="stars">
+          <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <svg viewBox="0 0 24 24" class="empty"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <svg viewBox="0 0 24 24" class="empty"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <svg viewBox="0 0 24 24" class="empty"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <svg viewBox="0 0 24 24" class="empty"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </div>
+        <p class="review-text" style="margin-top: 10px;">Bad food taste and poor service, cholesterol was sweet. I asked for Puri they gave Bhature! Taste was very mediocre.</p>
+        <div class="sentiment-row">
+          <span class="sentiment-tag negative">Food quality</span>
+          <span class="sentiment-tag negative">Wrong order</span>
+          <span class="sentiment-tag neutral">Service</span>
+        </div>
+      </div>
+
+      <!-- AI Response -->
+      <div class="section-label">Olly's Draft Response</div>
+
+      <div class="response-card" id="responseCard">
+        <div class="response-header">
+          <div class="olly-dot" id="ollyDot"></div>
+          <span class="response-header-label">Olly · Brand Voice</span>
+          <button class="edit-mode-btn" id="editModeBtn" onclick="toggleEditMode()">
+            <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Edit
+          </button>
+        </div>
+        <div class="response-body" style="position: relative;">
+          <div class="response-text-view" id="responseTextView">Hi Nikhil! Sorry to hear that the pav bhaji didn't hit the spot. We're on it — and we promise a tastier experience next time!
+
+Feel free to reach out to us at +91 12345 12345.</div>
+          <textarea class="response-textarea" id="responseTextarea" oninput="onTextareaInput(this)">Hi Nikhil! Sorry to hear that the pav bhaji didn't hit the spot. We're on it — and we promise a tastier experience next time!
+
+Feel free to reach out to us at +91 12345 12345.</textarea>
+          <div class="char-counter" id="charCounter" style="display:none;">156 / 300</div>
+        </div>
+      </div>
+
+      <!-- Quick instruction bar -->
+      <div class="quick-bar" onclick="document.getElementById('quickInput').focus()">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+        <input type="text" id="quickInput" class="quick-input" placeholder='Tell Olly what to change… e.g. "Add 10% off offer"' oninput="onQuickInput(this)" onkeydown="onQuickKey(event)">
+        <div class="quick-send" id="quickSend" onclick="applyQuickInstruction()">
+          <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </div>
+      </div>
+
+      <!-- Quick chips -->
+      <div class="chips-scroll" id="chipsRow">
+        <div class="chip" onclick="applyChip(this, 'offer')">
+          <svg viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+          Add offer
+        </div>
+        <div class="chip" onclick="applyChip(this, 'professional')">
+          <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+          Professional
+        </div>
+        <div class="chip" onclick="applyChip(this, 'casual')">
+          <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          More casual
+        </div>
+        <div class="chip" onclick="applyChip(this, 'shorter')">
+          <svg viewBox="0 0 24 24"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="14" y2="15"/></svg>
+          Shorter
+        </div>
+        <div class="chip" onclick="applyChip(this, 'empathy')">
+          <svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          More empathy
+        </div>
+        <div class="chip" onclick="applyChip(this, 'contact')">
+          <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.56 3.35 2 2 0 0 1 3.53 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.7a16 16 0 0 0 5.55 5.55l.86-.86a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          Remove contact
+        </div>
+        <div class="chip" onclick="goToScreen('screen2', false)">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/></svg>
+          Brand tone
+        </div>
+      </div>
+
+      <!-- Edit history -->
+      <div class="edit-history" id="editHistory"></div>
+
+      <div style="height: 20px;"></div>
+    </div>
+
+    <div class="screen-footer">
+      <button class="btn-primary" onclick="goToScreen('screen3', false)">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        Looks good · Send Reply
+      </button>
+      <button class="btn-secondary" onclick="regenerate()">↻ Regenerate from scratch</button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       SCREEN 2: Brand Tone & Offer Settings
+  ══════════════════════════════════════ -->
+  <div class="screen" id="screen2">
+    <div class="screen-header">
+      <div class="back-btn" onclick="goToScreen('screen1', true)"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+      <span class="screen-title">Response Settings</span>
+      <span class="step-indicator">2 / 3</span>
+    </div>
+
+    <div class="screen-body">
+      <div class="context-pill">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        Changes apply to this response only
+      </div>
+
+      <!-- Tone grid -->
+      <div class="section-label">Response Tone</div>
+      <div class="tone-grid">
+        <div class="tone-option" onclick="selectTone(this)">
+          <div class="tone-name">😤 Empathetic</div>
+          <div class="tone-desc">Warm & understanding</div>
+        </div>
+        <div class="tone-option selected" onclick="selectTone(this)">
+          <div class="tone-name">💼 Professional</div>
+          <div class="tone-desc">Formal & polished</div>
+        </div>
+        <div class="tone-option" onclick="selectTone(this)">
+          <div class="tone-name">😊 Friendly</div>
+          <div class="tone-desc">Casual & warm</div>
+        </div>
+        <div class="tone-option" onclick="selectTone(this)">
+          <div class="tone-name">⚡ Concise</div>
+          <div class="tone-desc">Short & to the point</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Offer section -->
+      <div class="section-label">Offer for Negative Reviews</div>
+      <div class="offer-banner" onclick="toggleOffer()">
+        <div class="offer-icon">🎁</div>
+        <div class="offer-text">
+          <div class="offer-title">Add recovery offer</div>
+          <div class="offer-desc">Invite unhappy customers back with a discount or freebie. Great for retention.</div>
+        </div>
+        <div class="offer-toggle" id="offerToggle"></div>
+      </div>
+
+      <div id="offerFields" style="display:none;">
+        <div class="instruction-panel">
+          <textarea id="offerText" placeholder='e.g. "Use code COMEBACK for 20% off your next visit!"' style="min-height: 60px;"></textarea>
+          <div class="instruction-shortcuts">
+            <div class="shortcut" onclick="insertOfferText('Use code COMEBACK for 20% off your next visit!')">20% off code</div>
+            <div class="shortcut" onclick="insertOfferText('Get a free dessert on us next time — just mention this review!')">Free dessert</div>
+            <div class="shortcut" onclick="insertOfferText('Call us and we\'ll make it right with a complimentary meal.')">Complimentary meal</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Always append section -->
+      <div class="section-label">Always Append</div>
+      <div class="instruction-panel">
+        <textarea id="alwaysAppend" placeholder='Text always added at the end of every response, e.g. "📍 Visit us at Brigade Road, Bengaluru"' style="min-height: 70px;"></textarea>
+      </div>
+
+      <div style="height: 20px;"></div>
+    </div>
+
+    <div class="screen-footer">
+      <button class="btn-primary" onclick="applySettings()">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        Apply Settings
+      </button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       SCREEN 3: Final Confirm
+  ══════════════════════════════════════ -->
+  <div class="screen" id="screen3">
+    <div class="screen-header">
+      <div class="back-btn" onclick="goToScreen('screen1', true)"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+      <span class="screen-title">Confirm Reply</span>
+      <span class="step-indicator">3 / 3</span>
+    </div>
+
+    <div class="screen-body">
+      <div class="review-card" style="margin-bottom: 16px;">
+        <div class="review-meta">
+          <div class="reviewer-avatar">NK</div>
+          <div class="reviewer-info">
+            <div class="reviewer-name">Nikhil C</div>
+            <div class="reviewer-sub">
+              <span class="platform-badge">ZOMATO</span>
+              <span class="dot"></span>
+              <span>1 star review</span>
+            </div>
+          </div>
+        </div>
+        <p class="review-text" style="font-size: 12px; color: var(--text-dim);">Bad food taste and poor service, cholesterol was sweet. I asked for Puri they gave Bhature!</p>
+      </div>
+
+      <div class="section-label">Your Reply</div>
+      <div class="response-card">
+        <div class="response-header">
+          <div class="olly-dot"></div>
+          <span class="response-header-label">Final Response</span>
+          <button class="edit-mode-btn" onclick="goToScreen('screen1', true)">
+            <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Edit
+          </button>
+        </div>
+        <div class="response-body">
+          <div class="response-text-view" id="confirmText">Hi Nikhil! Sorry to hear that the pav bhaji didn't hit the spot. We're on it — and we promise a tastier experience next time!
+
+Feel free to reach out to us at +91 12345 12345.</div>
+        </div>
+      </div>
+
+      <!-- Edit summary -->
+      <div id="editSummarySection" style="display:none; margin-bottom: 14px;">
+        <div class="section-label">Changes Made</div>
+        <div class="edit-history" id="confirmEditHistory"></div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="section-label">Sending To</div>
+      <div class="review-card" style="display: flex; align-items: center; gap: 12px;">
+        <span class="platform-badge" style="font-size: 11px; padding: 4px 10px;">ZOMATO</span>
+        <div>
+          <div style="font-size: 12px; font-weight: 600;">Zomato · The Beer Cafe, Koramangala</div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Reply will appear under Nikhil C's review</div>
+        </div>
+      </div>
+
+      <div style="height: 20px;"></div>
+    </div>
+
+    <div class="screen-footer">
+      <div class="footer-row">
+        <button class="btn-half" onclick="goToScreen('screen1', true)">
+          <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Edit more
+        </button>
+        <button class="btn-half danger" onclick="showSnackbar('Review dismissed')">
+          <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          Skip
+        </button>
+      </div>
+      <button class="btn-primary" style="margin-top: 8px;" onclick="sendReply()">
+        <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        Send Reply · Zomato
+      </button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       SCREEN 4: Success
+  ══════════════════════════════════════ -->
+  <div class="screen" id="screen4">
+    <div class="success-screen">
+      <div class="success-icon">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div class="success-title">Reply Sent! 🎉</div>
+      <div class="success-sub">Nikhil C will see your response on Zomato within a few minutes.</div>
+
+      <div class="success-card">
+        <div class="success-card-label">What you sent</div>
+        <div class="success-card-text" id="sentText">Hi Nikhil! Sorry to hear that the pav bhaji didn't hit the spot. We're on it — and we promise a tastier experience next time!
+
+Feel free to reach out to us at +91 12345 12345.</div>
+        <div class="edit-count">
+          <svg viewBox="0 0 24 24" width="12" height="12" stroke="var(--green)" fill="none" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <span id="editCountLabel">Sent as-is</span>
+          <span class="badge" id="editCountBadge"></span>
+        </div>
+      </div>
+
+      <div style="background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; width: 100%; text-align: left;">
+        <div style="font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+          <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          Olly has learnt your style
+        </div>
+        <div style="font-size: 11px; color: var(--text-muted); line-height: 1.65;">Your edits are saved to your brand voice. Future auto-responses will reflect your preferences automatically.</div>
+      </div>
+
+      <button class="btn-primary" style="margin-top: 8px;" onclick="goToScreen('screen1', false); resetAll();">
+        <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.36"/></svg>
+        Try another review
+      </button>
+    </div>
+  </div>
+
+  <!-- Loading overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-logo">olly</div>
+    <div class="loading-label">
+      <div class="thinking-dots"><span></span><span></span><span></span></div>
+      Rewriting response…
+    </div>
+  </div>
+
+  <!-- Snackbar -->
+  <div class="snackbar" id="snackbar">
+    <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+    <span id="snackbarText">Done</span>
+  </div>
+
+</div>
+
+<script>
+// ── State ──────────────────────────────
+let editHistory = [];
+let isEditMode = false;
+let offerOn = false;
+
+const originalResponse = `Hi Nikhil! Sorry to hear that the pav bhaji didn't hit the spot. We're on it — and we promise a tastier experience next time!\n\nFeel free to reach out to us at +91 12345 12345.`;
+
+const chipResponses = {
+  offer: `Hi Nikhil! Sorry to hear about your experience. We know we missed the mark, and that's not okay.\n\nAs a token of apology, use code COMEBACK for 20% off your next visit — we'd love to make it right. Reach us at +91 12345 12345.`,
+  professional: `Dear Nikhil,\n\nThank you for sharing your feedback. We sincerely apologize for the inconvenience caused — both regarding the order mix-up and the quality of food. This does not reflect our standards.\n\nPlease reach out to us at +91 12345 12345 and we will ensure this is addressed promptly.`,
+  casual: `Hey Nikhil! Super sorry about this — totally messed up on our end. Wrong order AND mediocre food? That's on us. We'll fix it!\n\nDrop us a message at +91 12345 12345 — we'll make it right 🙏`,
+  shorter: `Hi Nikhil, sorry for the bad experience — wrong order and poor quality is unacceptable. We're fixing it. Reach us at +91 12345 12345.`,
+  empathy: `Hi Nikhil, we're really sorry — a wrong order AND disappointing taste is genuinely frustrating, and you deserved much better from us. We hear you.\n\nPlease give us a chance to make this right. Reach us at +91 12345 12345.`,
+  contact: `Hi Nikhil! Sorry to hear that the pav bhaji didn't hit the spot. We're on it — and we promise a tastier experience next time!`,
+};
+
+const quickResponses = {
+  offer: { key: 'offer', label: 'Added 20% offer for recovery' },
+  professional: { key: 'professional', label: 'Switched to professional tone' },
+  casual: { key: 'casual', label: 'Made it more casual' },
+  short: { key: 'shorter', label: 'Made it shorter' },
+  empathy: { key: 'empathy', label: 'Added more empathy' },
+  contact: { key: 'contact', label: 'Removed contact info' },
+};
+
+// ── Navigation ──────────────────────────────
+function goToScreen(id, isBack) {
+  document.querySelectorAll('.screen').forEach(s => {
+    s.classList.remove('active', 'back');
+  });
+  const target = document.getElementById(id);
+  target.classList.add('active');
+  if (isBack) target.classList.add('back');
+
+  // Sync confirm screen
+  if (id === 'screen3') {
+    document.getElementById('confirmText').textContent = getCurrentText();
+    syncConfirmHistory();
+  }
+}
+
+function getCurrentText() {
+  return document.getElementById('responseTextView').textContent;
+}
+
+// ── Edit Mode Toggle ──────────────────────────────
+function toggleEditMode() {
+  isEditMode = !isEditMode;
+  const card = document.getElementById('responseCard');
+  const view = document.getElementById('responseTextView');
+  const textarea = document.getElementById('responseTextarea');
+  const counter = document.getElementById('charCounter');
+  const btn = document.getElementById('editModeBtn');
+
+  if (isEditMode) {
+    card.classList.add('editing');
+    textarea.value = view.textContent;
+    view.style.display = 'none';
+    textarea.style.display = 'block';
+    counter.style.display = 'block';
+    updateCharCount(textarea);
+    textarea.focus();
+    btn.innerHTML = `<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> Done`;
+  } else {
+    card.classList.remove('editing');
+    view.textContent = textarea.value;
+    view.style.display = 'block';
+    textarea.style.display = 'none';
+    counter.style.display = 'none';
+    btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> Edit`;
+    // add to history
+    if (textarea.value !== view.textContent) {
+      addHistory('Manually edited response');
+    }
+  }
+}
+
+function onTextareaInput(el) {
+  updateCharCount(el);
+}
+
+function updateCharCount(el) {
+  const counter = document.getElementById('charCounter');
+  const len = el.value.length;
+  counter.textContent = `${len} / 300`;
+  counter.style.color = len > 280 ? 'var(--red)' : 'var(--text-dim)';
+}
+
+// ── Quick instruction ──────────────────────────────
+function onQuickInput(el) {
+  const send = document.getElementById('quickSend');
+  if (el.value.trim().length > 0) {
+    send.classList.add('visible');
+  } else {
+    send.classList.remove('visible');
+  }
+}
+
+function onQuickKey(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    applyQuickInstruction();
+  }
+}
+
+function applyQuickInstruction() {
+  const input = document.getElementById('quickInput');
+  const val = input.value.trim().toLowerCase();
+  if (!val) return;
+
+  const label = input.value.trim();
+  input.value = '';
+  document.getElementById('quickSend').classList.remove('visible');
+
+  // Match intent
+  let responseKey = null;
+  if (val.includes('offer') || val.includes('discount') || val.includes('off') || val.includes('comeback') || val.includes('bring back')) responseKey = 'offer';
+  else if (val.includes('professional') || val.includes('formal')) responseKey = 'professional';
+  else if (val.includes('casual') || val.includes('friendly') || val.includes('warm')) responseKey = 'casual';
+  else if (val.includes('short') || val.includes('concise') || val.includes('brief')) responseKey = 'shorter';
+  else if (val.includes('empathy') || val.includes('sorry') || val.includes('understand')) responseKey = 'empathy';
+  else if (val.includes('remove contact') || val.includes('no contact') || val.includes('no phone')) responseKey = 'contact';
+
+  if (responseKey) {
+    showLoading(() => {
+      updateResponse(chipResponses[responseKey]);
+      addHistory(label);
+      showSnackbar('Response updated');
+    });
+  } else {
+    showLoading(() => {
+      // Generic: append a note
+      const current = document.getElementById('responseTextView').textContent;
+      const updated = current + `\n\n[Applied: ${label}]`;
+      updateResponse(updated);
+      addHistory(label);
+      showSnackbar('Response updated');
+    });
+  }
+}
+
+// ── Chips ──────────────────────────────
+function applyChip(el, key) {
+  // deselect all chips
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+
+  if (key === 'brand-tone') {
+    goToScreen('screen2', false);
+    return;
+  }
+
+  const response = chipResponses[key];
+  const chipLabels = {
+    offer: 'Added recovery offer',
+    professional: 'Switched to professional tone',
+    casual: 'Made it more casual',
+    shorter: 'Made it shorter',
+    empathy: 'Added more empathy',
+    contact: 'Removed contact info',
+  };
+
+  showLoading(() => {
+    updateResponse(response);
+    addHistory(chipLabels[key] || key);
+    showSnackbar('Response updated');
+    setTimeout(() => el.classList.remove('active'), 1000);
+  });
+}
+
+// ── Regenerate ──────────────────────────────
+function regenerate() {
+  const variants = [
+    `Hi Nikhil! We're really sorry about your recent visit — that's not the experience we want for our guests. We'll look into the order mix-up right away.\n\nPlease reach us at +91 12345 12345 and let us make it right.`,
+    `Dear Nikhil, thank you for your feedback. We apologize for both the wrong order and the quality issue. Our team has been informed and we're taking corrective steps immediately.\n\nKindly contact us at +91 12345 12345.`,
+    `Hey Nikhil! So sorry about this — Puri vs Bhature is a big mix-up and we totally get your frustration! We're sorting it out right now 🙏\n\nDM us or call +91 12345 12345.`,
+  ];
+  const r = variants[Math.floor(Math.random() * variants.length)];
+  showLoading(() => {
+    updateResponse(r);
+    addHistory('Regenerated response');
+    showSnackbar('New draft generated');
+  });
+}
+
+// ── Update response text ──────────────────────────────
+function updateResponse(text) {
+  const view = document.getElementById('responseTextView');
+  const textarea = document.getElementById('responseTextarea');
+  view.textContent = text;
+  textarea.value = text;
+  if (isEditMode) { toggleEditMode(); }
+}
+
+// ── History ──────────────────────────────
+function addHistory(label) {
+  editHistory.push(label);
+  renderHistory();
+}
+
+function renderHistory() {
+  const container = document.getElementById('editHistory');
+  container.innerHTML = '';
+  editHistory.forEach((item, i) => {
+    const el = document.createElement('div');
+    el.className = 'history-item';
+    el.innerHTML = `<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><span>${item}</span><span class="history-undo" onclick="undoHistory(${i})">Undo</span>`;
+    container.appendChild(el);
+  });
+}
+
+function undoHistory(index) {
+  editHistory.splice(index, 1);
+  renderHistory();
+  updateResponse(originalResponse);
+  showSnackbar('Change undone');
+}
+
+function syncConfirmHistory() {
+  const sec = document.getElementById('editSummarySection');
+  const container = document.getElementById('confirmEditHistory');
+  if (editHistory.length === 0) { sec.style.display = 'none'; return; }
+  sec.style.display = 'block';
+  container.innerHTML = '';
+  editHistory.forEach(item => {
+    const el = document.createElement('div');
+    el.className = 'history-item';
+    el.innerHTML = `<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg><span>${item}</span>`;
+    container.appendChild(el);
+  });
+}
+
+// ── Settings screen ──────────────────────────────
+function selectTone(el) {
+  document.querySelectorAll('.tone-option').forEach(t => t.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function toggleOffer() {
+  offerOn = !offerOn;
+  document.getElementById('offerToggle').classList.toggle('on', offerOn);
+  document.getElementById('offerFields').style.display = offerOn ? 'block' : 'none';
+}
+
+function insertOfferText(text) {
+  const ta = document.getElementById('offerText');
+  ta.value = text;
+  ta.focus();
+}
+
+function applySettings() {
+  const toneEl = document.querySelector('.tone-option.selected');
+  const tone = toneEl ? toneEl.querySelector('.tone-name').textContent : '';
+  const offer = document.getElementById('offerText').value.trim();
+  const append = document.getElementById('alwaysAppend').value.trim();
+
+  let label = `Applied: ${tone} tone`;
+  let newText = document.getElementById('responseTextView').textContent;
+
+  if (offer && offerOn) {
+    newText += `\n\n${offer}`;
+    label += ' + offer';
+  }
+  if (append) {
+    newText += `\n\n${append}`;
+  }
+
+  showLoading(() => {
+    updateResponse(newText);
+    addHistory(label);
+    showSnackbar('Settings applied');
+    goToScreen('screen1', true);
+  });
+}
+
+// ── Send ──────────────────────────────
+function sendReply() {
+  const text = getCurrentText();
+  document.getElementById('sentText').textContent = text;
+
+  if (editHistory.length === 0) {
+    document.getElementById('editCountLabel').textContent = 'Sent as Olly drafted it';
+    document.getElementById('editCountBadge').textContent = '';
+  } else {
+    document.getElementById('editCountLabel').textContent = `${editHistory.length} edit${editHistory.length > 1 ? 's' : ''} applied`;
+    document.getElementById('editCountBadge').textContent = '✓ Learnt';
+  }
+
+  goToScreen('screen4', false);
+}
+
+// ── Loading overlay ──────────────────────────────
+function showLoading(callback) {
+  const overlay = document.getElementById('loadingOverlay');
+  overlay.classList.add('show');
+  setTimeout(() => {
+    overlay.classList.remove('show');
+    callback();
+  }, 1200);
+}
+
+// ── Snackbar ──────────────────────────────
+let snackTimer;
+function showSnackbar(msg) {
+  const sb = document.getElementById('snackbar');
+  document.getElementById('snackbarText').textContent = msg;
+  sb.classList.add('show');
+  clearTimeout(snackTimer);
+  snackTimer = setTimeout(() => sb.classList.remove('show'), 2200);
+}
+
+// ── Reset ──────────────────────────────
+function resetAll() {
+  editHistory = [];
+  isEditMode = false;
+  offerOn = false;
+  document.getElementById('editHistory').innerHTML = '';
+  document.getElementById('offerToggle').classList.remove('on');
+  document.getElementById('offerFields').style.display = 'none';
+  document.getElementById('offerText').value = '';
+  document.getElementById('alwaysAppend').value = '';
+  document.getElementById('quickInput').value = '';
+  document.getElementById('quickSend').classList.remove('visible');
+  document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.tone-option').forEach((t,i) => t.classList.toggle('selected', i===1));
+  updateResponse(originalResponse);
+}
+</script>
+</body>
+</html>
