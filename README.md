@@ -31,15 +31,16 @@ The goal is to provide flexibility without increasing setup friction.
 
 ## Prototype
 
-[Prototype Link]
+(https://aribah123armin.github.io/olly-auto-response-redesign/?utm_source=chatgpt.com)
 
-## Loom Walkthrough
+## Walkthrough Video
 
-[Loom Link]
+https://drive.google.com/file/d/17RBQWPSvcVnt6NDh3R61-b14S4FWW54y/view?usp=sharing
 
 ## Screenshots
 
-(Add screenshots here)
+<img width="597" height="909" alt="image" src="https://github.com/user-attachments/assets/65df9b14-c280-49d5-9ffa-eaa8a16453c7" />, <img width="597" height="909" alt="image" src="https://github.com/user-attachments/assets/f9c940c6-95b9-424b-ad48-2c2e818e0084" /> , <img width="489" height="942" alt="image" src="https://github.com/user-attachments/assets/d70341b8-2251-438c-ad58-0330ae63b2b8" />
+
 
 ## Key Design Principles
 
